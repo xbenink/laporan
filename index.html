@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Laporan keuangan</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background: #f9f9f9;
+    color: #333;
+  }
+
+  h1 {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 1.8em;
+  }
+
+  /* Filter */
+  #filter-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  label {
+    font-weight: bold;
+  }
+
+  select {
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  /* Totals */
+  #totals {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .total-box {
+    background: #fff;
+    padding: 10px;
+    border-radius: 4px;
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  /* Loading */
+  #loading {
+    text-align: center;
+    display: none;
+    margin: 20px 0;
+  }
+
+  /* Data table */
+  #data-container {
+    margin-bottom: 20px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+  }
+
+  th, td {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+  }
+
+  th {
+    background-color: #eee;
+  }
+
+  /* Pagination */
+  #pagination {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  button {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    background: #2980b9;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+
+  /* Responsive */
+  @media(max-width: 768px) {
+    #filter-container {
+      flex-direction: column;
+    }
+    #totals {
+      flex-direction: column;
+    }
+    table {
+      font-size: 13px;
+    }
+  }
+</style>
+</head>
+<body>
+<h1>Laporan Keuangan</h1>
+
+<div id="filter-container">
+  <label for="kategoriFilter">Filter Kategori:</label>
+  <select id="kategoriFilter">
+    <option value="">Semua</option>
+  </select>
+</div>
+
+<div id="totals">
+  <div class="total-box" id="total-pemasukan"><strong>Total Pemasukan:</strong><br>Rp 0</div>
+  <div class="total-box" id="total-pengeluaran"><strong>Total Pengeluaran:</strong><br>Rp 0</div>
+  <div class="total-box" id="saldo"><strong>Saldo:</strong><br>Rp 0</div>
+</div>
+
+<div id="loading">Memuat data...</div>
+<div id="data-container"></div>
+<div id="pagination"></div>
+
+<script>
+const apiUrl = 'https://script.google.com/macros/s/AKfycbz_32y36zrXtUCFt9_9J0zAxigngH5Rx5lrWJ8qvwve_34MjjFTCf4Xs74SY-sEP6Bw/exec';
+
+let dataArray = [], header = [], filteredData = [];
+let currentPage = 1;
+const rowsPerPage = 10;
+
+// Fetch data
+async function fetchData() {
+  document.getElementById('loading').style.display = 'block';
+  try {
+    const res = await fetch(apiUrl);
+    const data = await res.json();
+    dataArray = data;
+    header = data[0];
+
+    populateFilter();
+    applyFilter();
+  } catch (e) {
+    document.getElementById('loading').innerText = 'Gagal memuat data.';
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+  }
+}
+
+// Populate filter options
+function populateFilter() {
+  const index = header.indexOf('KATEGORI');
+  const setKategori = new Set();
+  dataArray.slice(1).forEach(row => {
+    if (row[index]) setKategori.add(row[index]);
+  });
+  const select = document.getElementById('kategoriFilter');
+  select.innerHTML = '<option value="">Semua</option>';
+  setKategori.forEach(k => {
+    const opt = document.createElement('option');
+    opt.value = k;
+    opt.innerText = k;
+    select.appendChild(opt);
+  });
+}
+
+// Calculate totals
+function calculateTotals(data) {
+  const pemasukanIdx = header.indexOf('PEMASUKAN');
+  const pengeluaranIdx = header.indexOf('PENGELUARAN');
+
+  let totalPemasukan = 0, totalPengeluaran = 0;
+  data.slice(1).forEach(row => {
+    totalPemasukan += parseFloat(row[pemasukanIdx]) || 0;
+    totalPengeluaran += parseFloat(row[pengeluaranIdx]) || 0;
+  });
+  const saldo = totalPemasukan - totalPengeluaran;
+
+  document.getElementById('total-pemasukan').innerHTML = `<strong>Total Pemasukan:</strong><br>Rp ${totalPemasukan.toLocaleString('id-ID')}`;
+  document.getElementById('total-pengeluaran').innerHTML = `<strong>Total Pengeluaran:</strong><br>Rp ${totalPengeluaran.toLocaleString('id-ID')}`;
+  document.getElementById('saldo').innerHTML = `<strong>Saldo:</strong><br>Rp ${saldo.toLocaleString('id-ID')}`;
+}
+
+// Render table
+function showData() {
+  const start = (currentPage -1) * rowsPerPage;
+  const pageData = [header, ...filteredData.slice(start, start + rowsPerPage)];
+  document.getElementById('loading').style.display = 'none';
+
+  if (pageData.length <= 1) {
+    document.getElementById('data-container').innerHTML = 'Tidak ada data.';
+    // Reset totals
+    calculateTotals([header]);
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+
+  // Hitung total dari data yang tampil
+  calculateTotals([header, ...filteredData]);
+
+  // Buat tabel
+  let html = '<table><thead><tr>';
+  header.forEach(h => { html += `<th>${h}</th>`; });
+  html += '</tr></thead><tbody>';
+  pageData.slice(1).forEach(row => {
+    html += '<tr>';
+    row.forEach(cell => { html += `<td>${cell}</td>`; });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('data-container').innerHTML = html;
+
+  renderPagination();
+}
+
+// Render pagination buttons
+function renderPagination() {
+  const totalPage = Math.ceil(filteredData.length / rowsPerPage);
+  const container = document.getElementById('pagination');
+  container.innerHTML = '';
+
+  if (totalPage <=1) return;
+
+  const prevBtn = document.createElement('button');
+  prevBtn.innerText='Sebelumnya';
+  prevBtn.disabled = currentPage===1;
+  prevBtn.onclick=()=>{currentPage--; showData();}
+  container.appendChild(prevBtn);
+
+  for (let i=1; i<=totalPage; i++) {
+    const btn = document.createElement('button');
+    btn.innerText=i;
+    if(i===currentPage) btn.disabled=true;
+    btn.onclick=()=>{currentPage=i; showData();}
+    container.appendChild(btn);
+  }
+
+  const nextBtn = document.createElement('button');
+  nextBtn.innerText='Selanjutnya';
+  nextBtn.disabled= currentPage===totalPage;
+  nextBtn.onclick= ()=>{currentPage++; showData();}
+  container.appendChild(nextBtn);
+}
+
+// Filter handler
+function applyFilter() {
+  const kategori = document.getElementById('kategoriFilter').value;
+  const index = header.indexOf('KATEGORI');
+
+  if(kategori==='') {
+    filteredData = dataArray.slice(1);
+  } else {
+    filteredData = dataArray.slice(1).filter(row => row[index]===kategori);
+  }
+  currentPage=1;
+  showData();
+}
+
+// Event listener
+document.getElementById('kategoriFilter').addEventListener('change',applyFilter);
+
+// Init
+window.onload=fetchData;
+</script>
+</body>
+</html>
