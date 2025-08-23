@@ -70,7 +70,6 @@
     .pagination select, .filters select, .filters input { padding: 0.3em 0.5em; font-size: 1em; background: var(--bg); color: var(--fg); border: 1px solid var(--table-border); border-radius: 4px;}
     .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
     .table-wrapper { overflow-x: auto; }
-
     /* Floating icon group */
     .floating-icons {
       position: fixed;
@@ -79,6 +78,25 @@
       z-index: 1000;
       display: flex;
       gap: 8px;
+    }
+    table tr:nth-child(even) td {
+      background: #f9f9f9;
+    }
+    html[data-theme="dark"] table tr:nth-child(even) td {
+      background: #23242b;
+    }
+    #loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      font-size: 1.2em;
+      color: var(--accent);
+      font-weight: bold;
+      background: var(--summary-bg);
+      border-radius: 8px;
+      margin-bottom: 2em;
+      letter-spacing: 1px;
     }
     .icon-btn {
       width: 40px;
@@ -101,7 +119,6 @@
       color: var(--bg);
       box-shadow: 0 1px 4px rgba(0,0,0,0.13);
     }
-
     @media (max-width: 600px) {
       .filters, .summary, .pagination { flex-direction: column; align-items: stretch; gap: 0.5em; }
       table, th, td { font-size: 0.87em; }
@@ -111,6 +128,7 @@
       .pagination button, .pagination select { font-size: 0.95em; }
       .floating-icons { top: 10px; right: 10px; gap: 4px; }
       .icon-btn { width: 34px; height: 34px; font-size: 1.15em; }
+      #loading { min-height: 100px; font-size: 1em; }
     }
     /* Print styles */
     @media print {
@@ -137,7 +155,7 @@
       </select>
     </div>
     <div>
-      <label for="keterangan">Cari Keterangan:</label>
+      <label for="keterangan">Keterangan:</label>
       <input type="text" id="keterangan" placeholder="Ketik kata...">
     </div>
   </div>
@@ -186,9 +204,17 @@
       setTheme(curr === 'dark' ? 'light' : 'dark');
     };
 
-    // Print button
+    // Print button - cetak semua hasil filter, bukan hanya halaman aktif
     document.getElementById('print-btn').onclick = function() {
+      const oldPage = currentPage;
+      const oldPerPage = perPage;
+      perPage = filteredRows.length || 9999;
+      currentPage = 1;
+      renderTable();
       window.print();
+      perPage = oldPerPage;
+      currentPage = oldPage;
+      renderTable();
     };
 
     // Main logic
@@ -199,6 +225,17 @@
     let filteredRows = [];
     let currentPage = 1;
     let perPage = 10;
+
+    function parseTanggal(str) {
+      // Format: dd/mm/yyyy atau d/m/yyyy
+      if (!str) return 0;
+      const parts = str.split('/');
+      if (parts.length !== 3) return 0;
+      const [dd, mm, yyyy] = parts;
+      // new Date(year, month-1, day)
+      const date = new Date(Number(yyyy), Number(mm)-1, Number(dd));
+      return date.getTime() || 0;
+    }
 
     function renderTable() {
       const table = document.getElementById('data-table');
@@ -233,8 +270,8 @@
 
       // Tampilkan summary
       document.getElementById('summary').style.display = '';
-      document.getElementById('total-pemasukan').innerText = "Total Pemasukan: Rp " + totalPemasukan.toLocaleString();
-      document.getElementById('total-pengeluaran').innerText = "Total Pengeluaran: Rp " + totalPengeluaran.toLocaleString();
+      document.getElementById('total-pemasukan').innerText = "Pemasukan: Rp " + totalPemasukan.toLocaleString();
+      document.getElementById('total-pengeluaran').innerText = "Pengeluaran: Rp " + totalPengeluaran.toLocaleString();
       document.getElementById('saldo').innerText = "Saldo: Rp " + saldo.toLocaleString();
 
       // Pagination UI
@@ -266,6 +303,9 @@
         document.getElementById('loading').style.display = 'none';
 
         [headers, ...rows] = rawData;
+        // Urutkan rows berdasarkan tanggal (terbaru di awal)
+        const idxTanggal = headers.findIndex(h => h.toUpperCase() === 'TANGGAL');
+        rows.sort((a, b) => parseTanggal(b[idxTanggal]) - parseTanggal(a[idxTanggal]));
         // Header tabel
         document.getElementById('table-head').innerHTML = '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
         // Inisialisasi kategori unik
